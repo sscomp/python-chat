@@ -5,6 +5,9 @@
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
   <title>Python 聊天室</title>
   <link rel="stylesheet" href="/static/style.css" />
+  <link rel="manifest" href="/static/manifest.json">
+  <meta name="theme-color" content="#0f172a">
+  <link rel="apple-touch-icon" href="/static/icons/icon-192.png">
 </head>
 <body>
   <header class="app-bar">
@@ -55,6 +58,16 @@
       <div id="typing" class="typing hidden"></div>
     </div>
   </main>
+
+  <script>
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("/static/service-worker.js")
+        .then(reg => console.log("✅ ServiceWorker registered:", reg.scope))
+        .catch(err => console.error("❌ ServiceWorker failed:", err));
+    });
+  }
+  </script>
 
   <script src="/static/main.js"></script>
 </body>
