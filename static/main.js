@@ -94,7 +94,10 @@ function enterChat(u){
 function connectWS(){
   const token = localStorage.getItem("jwt");
   if (!token) return;
-  const wsUrl = "ws://" + location.host + "/ws?token=" + encodeURIComponent(token);
+  //const wsUrl = "ws://" + location.host + "/ws?token=" + encodeURIComponent(token);
+  
+  const scheme = location.protocol === "https:" ? "wss://" : "ws://";
+  const wsUrl = scheme + location.host + "/ws?token=" + encodeURIComponent(token);
   console.log("Connecting with:", wsUrl);
 
   ws = new WebSocket(wsUrl);
