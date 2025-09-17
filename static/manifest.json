@@ -1,6 +1,6 @@
 {
-  "name": "Python 聊天室",
-  "short_name": "聊天室",
+  "name": "Python Cat",
+  "short_name": "Cat",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0f172a",
