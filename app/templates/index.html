@@ -1,0 +1,61 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+  <title>Python 聊天室</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header class="app-bar">
+    <div class="title">Python 聊天室</div>
+    <div class="subtitle" id="status">未登入</div>
+  </header>
+
+  <!-- 登入/註冊 -->
+  <section id="auth" class="auth">
+    <div class="card" id="login-card">
+      <h2>登入</h2>
+      <form id="login-form" class="stack">
+        <input type="text" id="login-username" placeholder="帳號" required />
+        <input type="text" id="login-otp" placeholder="OTP 六位數" inputmode="numeric" required />
+        <button type="submit">登入</button>
+      </form>
+      <p>還沒有帳號？ <a href="#" id="goto-register">註冊</a></p>
+    </div>
+
+    <div class="card hidden" id="register-card">
+      <h2>註冊</h2>
+      <form id="register-form" class="stack">
+        <input type="text" id="reg-username" placeholder="帳號" required />
+        <button type="submit">註冊並產生 QR Code</button>
+      </form>
+      <div id="qr-wrap" class="qr-wrap hidden">
+        <p>請用 Google Authenticator 掃描：</p>
+        <img id="qr-img" alt="QR Code" />
+      </div>
+      <p>已有帳號？ <a href="#" id="goto-login">登入</a></p>
+    </div>
+  </section>
+
+  <!-- 聊天室 -->
+  <main id="chat" class="chat hidden" aria-live="polite">
+    <div class="toolbar">
+      <span id="hello"></span>
+      <button id="logout" class="ghost">登出</button>
+    </div>
+
+    <div id="messages" class="messages"></div>
+
+    <div class="composer">
+      <form id="chat-form" class="chat-form">
+        <input id="message-input" type="text" placeholder="輸入訊息..." autocomplete="off" />
+        <button type="submit">送出</button>
+      </form>
+      <div id="typing" class="typing hidden"></div>
+    </div>
+  </main>
+
+  <script src="/static/main.js"></script>
+</body>
+</html>
