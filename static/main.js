@@ -27,6 +27,43 @@ const typingEl = $("#typing");
 let ws = null;
 let username = null;
 
+const newMsgBtn = document.createElement('button');
+newMsgBtn.id = 'new-messages';
+newMsgBtn.textContent = '有新訊息，點擊查看';
+newMsgBtn.className = 'ghost hidden';
+Object.assign(newMsgBtn.style, {
+  position: 'fixed',
+  right: '1.5rem',
+  bottom: '6rem',
+  zIndex: '30'
+});
+newMsgBtn.addEventListener('click', () => {
+  scrollToBottom();
+  hideNewMessageIndicator();
+});
+chatSection.appendChild(newMsgBtn);
+
+function isNearBottom(){
+  const threshold = 40;
+  return messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight < threshold;
+}
+
+function scrollToBottom(){
+  messagesEl.scrollTop = messagesEl.scrollHeight;
+}
+
+function showNewMessageIndicator(){
+  newMsgBtn.classList.remove('hidden');
+}
+
+function hideNewMessageIndicator(){
+  newMsgBtn.classList.add('hidden');
+}
+
+messagesEl.addEventListener('scroll', () => {
+  if (isNearBottom()) hideNewMessageIndicator();
+});
+
 function setStatus(text){ statusEl.textContent = text; }
 
 // 切換
@@ -61,7 +98,7 @@ loginForm.addEventListener("submit", async e => {
   const data = await res.json();
   localStorage.setItem("jwt", data.access_token);
   localStorage.setItem("username", u);
-  enterChat(u);
+  await enterChat(u);
 });
 
 // 註冊
@@ -82,18 +119,37 @@ registerForm.addEventListener("submit", async e => {
   qrWrap.classList.remove("hidden");
 });
 
-function enterChat(u){
+async function enterChat(u){
   username = u;
   authSection.classList.add("hidden");
   chatSection.classList.remove("hidden");
   helloEl.textContent = "Hi，" + username;
   setStatus("已登入");
+  await loadHistory();
   connectWS();
 }
 
-function connectWS(){
+async function loadHistory(){
+  messagesEl.innerHTML = "";
+  hideNewMessageIndicator();
+  try {
+    const res = await fetch("/history");
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const history = await res.json();
+    if (Array.isArray(history)) {
+      history.forEach(msg => appendMessage(msg, msg.user === username));
+    }
+    scrollToBottom();
+  } catch (err) {
+    console.error("Failed to load history", err);
+  }
+}
+
+
+async function connectWS(reloadHistory = false){
   const token = localStorage.getItem("jwt");
   if (!token) return;
+  if (reloadHistory) await loadHistory();
   //const wsUrl = "ws://" + location.host + "/ws?token=" + encodeURIComponent(token);
   
   const scheme = location.protocol === "https:" ? "wss://" : "ws://";
@@ -102,11 +158,14 @@ function connectWS(){
 
   ws = new WebSocket(wsUrl);
 
-  ws.onopen = () => console.log("✅ WebSocket opened");
+  ws.onopen = () => {
+    console.log("✅ WebSocket opened");
+    setStatus("已登入");
+  };
   ws.onclose = (event) => {
     console.warn("❌ WebSocket closed:", event.code, event.reason);
     setStatus("連線中斷");
-    setTimeout(connectWS, 3000); // 3 秒後重連
+    setTimeout(() => connectWS(true), 3000); // 3 秒後重連
   };
   ws.onmessage = (event) => {
     const data = JSON.parse(event.data);
@@ -137,8 +196,16 @@ function appendMessage({ type, user, text, ts }, isMe = false) {
     bubble.append(meta, body);
   }
   wrap.append(bubble);
+
+  const wasNearBottom = isNearBottom();
   messagesEl.append(wrap);
-  messagesEl.scrollTop = messagesEl.scrollHeight;
+
+  if (wasNearBottom) {
+    scrollToBottom();
+    hideNewMessageIndicator();
+  } else {
+    showNewMessageIndicator();
+  }
 }
 
 chatForm.addEventListener("submit", e => {
@@ -158,8 +225,8 @@ logoutBtn.addEventListener("click", () => {
   if (ws) try { ws.close(); } catch {}
 });
 
-(function boot(){
+(async function boot(){
   const token = localStorage.getItem("jwt");
   const u = localStorage.getItem("username");
-  if (token && u) enterChat(u);
+  if (token && u) await enterChat(u);
 })();

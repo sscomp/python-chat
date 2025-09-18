@@ -1,4 +1,8 @@
 import os
+import json
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
 from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, Form, HTTPException
 from fastapi.responses import StreamingResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
@@ -6,8 +10,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from typing import List
 import io
 
-from datetime import datetime
-from zoneinfo import ZoneInfo
+
 
 from app import auth
 
@@ -26,6 +29,24 @@ app.add_middleware(
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 # ---- API 區 ----
+
+# --------------------------
+# 簡易聊天歷史記錄（記憶體）
+# --------------------------
+chat_history = []
+MAX_HISTORY = 1000
+
+def save_message(message: dict):
+    """保存訊息到歷史快取"""
+    chat_history.append(message)
+    if len(chat_history) > MAX_HISTORY:
+        chat_history.pop(0)
+
+@app.get("/history")
+def get_history():
+    """取得最近的聊天記錄"""
+    return chat_history
+
 
 @app.post("/register")
 def register(username: str = Form(...)):
@@ -77,8 +98,11 @@ class ConnectionManager:
                 break
 
     async def broadcast(self, message: dict):
+        message_to_send = dict(message)
+        message_to_send.setdefault("ts", datetime.utcnow().isoformat())
+        save_message(message_to_send)
         for ws, _ in self.active:
-            await ws.send_json(message)
+            await ws.send_json(message_to_send)
 
 manager = ConnectionManager()
 
