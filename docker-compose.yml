@@ -8,7 +8,8 @@ services:
       - "80:8000"
     environment:
       - APP_SECRET=ilovepisco220
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    command: uvicorn main:app --host 0.0.0.0 --port 8000 --reload
     volumes:
-      - .:/code
-    working_dir: /code
+      - ./code:/code   # 掛載本機，修改即時生效
+      - ./static:/static:ro
+      - ./uploads:/uploads

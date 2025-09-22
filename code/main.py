@@ -1,9 +1,23 @@
 import os
 import json
+import shutil
 from datetime import datetime
+from pathlib import Path
+from uuid import uuid4
 from zoneinfo import ZoneInfo
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect, Request, Form, HTTPException
+from fastapi import (
+    FastAPI,
+    WebSocket,
+    WebSocketDisconnect,
+    Request,
+    Form,
+    HTTPException,
+    UploadFile,
+    File,
+    Depends,
+    Header,
+)
 from fastapi.responses import StreamingResponse, HTMLResponse
 from fastapi.staticfiles import StaticFiles
 from fastapi.middleware.cors import CORSMiddleware
@@ -12,9 +26,34 @@ import io
 
 
 
-from app import auth
+import auth
 
 app = FastAPI()
+
+BASE_DIR = Path(__file__).resolve().parent
+ROOT_DIR = BASE_DIR.parent
+
+
+def find_path(*candidates: Path) -> Path:
+    for path in candidates:
+        if path.exists():
+            return path
+    raise RuntimeError(f"None of the candidate paths exist: {candidates}")
+
+
+STATIC_DIR = find_path(
+    BASE_DIR / "static",
+    ROOT_DIR / "static",
+    Path("/static"),
+)
+
+TEMPLATE_DIR = find_path(
+    BASE_DIR / "templates",
+    ROOT_DIR / "templates",
+)
+
+UPLOAD_DIR = (ROOT_DIR / "uploads")
+UPLOAD_DIR.mkdir(parents=True, exist_ok=True)
 
 # CORS (開發用)
 app.add_middleware(
@@ -26,7 +65,8 @@ app.add_middleware(
 )
 
 # 靜態檔案
-app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
+app.mount("/uploads", StaticFiles(directory=str(UPLOAD_DIR)), name="uploads")
 
 # ---- API 區 ----
 
@@ -41,6 +81,17 @@ def save_message(message: dict):
     chat_history.append(message)
     if len(chat_history) > MAX_HISTORY:
         chat_history.pop(0)
+
+
+def get_current_user(authorization: str = Header(None)) -> str:
+    """從 Authorization header 驗證使用者"""
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Missing token")
+    token = authorization.split(" ", 1)[1]
+    username = auth.verify_token(token)
+    if not username:
+        raise HTTPException(status_code=401, detail="Invalid or expired token")
+    return username
 
 @app.get("/history")
 def get_history():
@@ -77,7 +128,7 @@ def get_me(request: Request):
 
 @app.get("/")
 def index():
-    with open("app/templates/index.html", encoding="utf-8") as f:
+    with open(TEMPLATE_DIR / "index.html", encoding="utf-8") as f:
         return HTMLResponse(f.read())
 
 # ---- WebSocket ----
@@ -133,3 +184,34 @@ async def websocket_endpoint(websocket: WebSocket):
     except WebSocketDisconnect:
         manager.disconnect(websocket)
         await manager.broadcast({"type": "system", "text": f"{username} 離開聊天室"})
+
+
+@app.post("/upload")
+async def upload(file: UploadFile = File(...), current_user: str = Depends(get_current_user)):
+    """接收檔案上傳並廣播附件訊息"""
+    original_name = file.filename or "attachment"
+    suffix = Path(original_name).suffix[:10]
+    unique_name = f"{datetime.utcnow().strftime('%Y%m%d%H%M%S')}_{uuid4().hex}{suffix}"
+    dest_path = UPLOAD_DIR / unique_name
+
+    with dest_path.open("wb") as buffer:
+        shutil.copyfileobj(file.file, buffer)
+
+    await file.close()
+
+    public_url = f"/uploads/{unique_name}"
+    message = {
+        "type": "file",
+        "user": current_user,
+        "url": public_url,
+        "filename": original_name,
+        "content_type": file.content_type,
+        "ts": datetime.utcnow().isoformat(),
+    }
+    await manager.broadcast(message)
+
+    return {
+        "url": public_url,
+        "filename": original_name,
+        "content_type": file.content_type,
+    }

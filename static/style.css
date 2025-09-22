@@ -128,6 +128,18 @@ a { color: var(--accent); cursor: pointer; text-decoration: none; }
   color: var(--sys);
   font-weight: 600;
 }
+.attachment-link {
+  display: inline-block;
+  margin-top: .2rem;
+  font-weight: 600;
+}
+.attachment-image {
+  display: block;
+  margin-top: .4rem;
+  max-width: min(280px, 65vw);
+  border-radius: .7rem;
+  border: 1px solid rgba(148,163,184,.25);
+}
 
 .composer {
   position: fixed;
@@ -159,6 +171,17 @@ a { color: var(--accent); cursor: pointer; text-decoration: none; }
   color: var(--text);
   font-weight: 700;
   cursor: pointer;
+}
+.chat-form button:disabled {
+  opacity: .6;
+  cursor: not-allowed;
+}
+.chat-form .icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: .6rem .8rem;
+  font-size: 1.1rem;
 }
 .typing {
   max-width: 900px;

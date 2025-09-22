@@ -23,6 +23,8 @@ const messagesEl = $("#messages");
 const chatForm = $("#chat-form");
 const inputEl = $("#message-input");
 const typingEl = $("#typing");
+const uploadBtn = $("#upload-btn");
+const fileInput = $("#file-input");
 
 let ws = null;
 let username = null;
@@ -49,7 +51,18 @@ function isNearBottom(){
 }
 
 function scrollToBottom(){
+  if (!messagesEl) return;
   messagesEl.scrollTop = messagesEl.scrollHeight;
+
+  // 先在下一幀嘗試捲動，確保 layout 已更新
+  requestAnimationFrame(() => {
+    messagesEl.scrollTop = messagesEl.scrollHeight;
+
+    // Safari 有時候還需要等 layout 完成
+    setTimeout(() => {
+      messagesEl.scrollTop = messagesEl.scrollHeight;
+    }, 100);
+  });
 }
 
 function showNewMessageIndicator(){
@@ -65,6 +78,12 @@ messagesEl.addEventListener('scroll', () => {
 });
 
 function setStatus(text){ statusEl.textContent = text; }
+
+function isImageAttachment(contentType, filename) {
+  if (contentType && contentType.startsWith('image/')) return true;
+  if (!filename) return false;
+  return /\.(png|jpe?g|gif|webp|bmp|svg)$/i.test(filename);
+}
 
 // 切換
 gotoRegister.addEventListener("click", e => {
@@ -173,7 +192,7 @@ async function connectWS(reloadHistory = false){
   };
 }
 
-function appendMessage({ type, user, text, ts }, isMe = false) {
+function appendMessage({ type, user, text, ts, url, filename, content_type }, isMe = false) {
   const wrap = document.createElement("div");
   wrap.className = `msg ${type === "system" ? "system" : ""} ${isMe ? "me" : ""}`;
   const bubble = document.createElement("div");
@@ -188,11 +207,33 @@ function appendMessage({ type, user, text, ts }, isMe = false) {
     who.className = "user";
     who.textContent = user;
     const when = document.createElement("span");
-    when.textContent = ` ・${new Date(ts).toLocaleTimeString()}`;
+    const displayTime = ts ? new Date(ts) : new Date();
+    when.textContent = ` ・${displayTime.toLocaleTimeString()}`;
     //when.textContent = ` ・${new Date(ts).toLocaleTimeString("zh-TW", { hour12: false })}`;
     meta.append(who, when);
     const body = document.createElement("div");
-    body.textContent = text;
+    if (type === "file") {
+      if (url) {
+        const link = document.createElement("a");
+        link.href = url;
+        link.target = "_blank";
+        link.rel = "noopener noreferrer";
+        link.textContent = `📎 ${filename || '附件'}`;
+        link.className = "attachment-link";
+        body.append(link);
+        if (isImageAttachment(content_type, filename)) {
+          const img = document.createElement("img");
+          img.src = url;
+          img.alt = filename || "attachment";
+          img.className = "attachment-image";
+          body.append(img);
+        }
+      } else {
+        body.textContent = `${user} 分享了附件`;
+      }
+    } else {
+      body.textContent = text;
+    }
     bubble.append(meta, body);
   }
   wrap.append(bubble);
@@ -200,7 +241,7 @@ function appendMessage({ type, user, text, ts }, isMe = false) {
   const wasNearBottom = isNearBottom();
   messagesEl.append(wrap);
 
-  if (wasNearBottom) {
+  if (wasNearBottom || isMe) {
     scrollToBottom();
     hideNewMessageIndicator();
   } else {
@@ -214,7 +255,52 @@ chatForm.addEventListener("submit", e => {
   if (!text || !ws || ws.readyState !== WebSocket.OPEN) return;
   ws.send(JSON.stringify({ type: "chat", text }));
   inputEl.value = "";
+  scrollToBottom();
 });
+
+async function uploadFile(file) {
+  const token = localStorage.getItem("jwt");
+  if (!token) {
+    alert("請先登入");
+    return;
+  }
+
+  const fd = new FormData();
+  fd.append("file", file);
+
+  try {
+    const res = await fetch("/upload", {
+      method: "POST",
+      body: fd,
+      headers: {
+        Authorization: `Bearer ${token}`
+      }
+    });
+
+    if (!res.ok) {
+      throw new Error(`HTTP ${res.status}`);
+    }
+  } catch (err) {
+    console.error("Upload failed", err);
+    alert("上傳失敗，請稍後再試");
+  }
+}
+
+if (uploadBtn && fileInput) {
+  uploadBtn.addEventListener("click", () => fileInput.click());
+
+  fileInput.addEventListener("change", async () => {
+    const file = fileInput.files?.[0];
+    if (!file) return;
+    uploadBtn.disabled = true;
+    try {
+      await uploadFile(file);
+    } finally {
+      uploadBtn.disabled = false;
+      fileInput.value = "";
+    }
+  });
+}
 
 logoutBtn.addEventListener("click", () => {
   localStorage.clear();
